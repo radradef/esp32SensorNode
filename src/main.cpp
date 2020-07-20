@@ -59,7 +59,7 @@ void gatherData(){
   delay(30000);
   err = my_sds.read(&p25, &p10);
 
-	if (!err) {
+  if (!err) {
 		Serial.println("P2.5: " + String(p25));
 		Serial.println("P10:  " + String(p10));
 	}
@@ -83,7 +83,7 @@ void gatherData(){
 }
 
 void postData(){
-    if(WiFi.status()== WL_CONNECTED){   //Check WiFi connection status
+    if(WiFi.status() == WL_CONNECTED){   //Check WiFi connection status
   
     HTTPClient http;   
     String json = "{\"pm25\":\"" + String(p25) + 
