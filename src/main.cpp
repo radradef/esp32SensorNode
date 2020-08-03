@@ -4,7 +4,7 @@
 #include <OneWire.h>
 #include <SDS011.h>
 #include <WiFi.h>
-#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 
 #define uS_TO_S_FACTOR 1000000 
 #define TIME_TO_SLEEP  600 
@@ -14,7 +14,7 @@
 float p10, p25, temp, hum;
 int err;
 
-HardwareSerial port(2);
+HardwareSerial hw_port(2);
 SDS011 my_sds;
 DHT dht(DHTPIN, DHTTYPE);
 
@@ -23,8 +23,13 @@ const char* ssid = "";
 const char* password =  "";
 
 //server config
-const String serverAPI = "";
+const char* host = "";
+const String uri = "";
 const String auth_token = "";
+const char* root_ca= \
+"-----BEGIN CERTIFICATE-----\n" \
+
+"-----END CERTIFICATE-----\n";
 
 void gatherData();
 void postData();
@@ -37,7 +42,7 @@ void setup() {
   Serial.println("Setup ESP32 to sleep for every " 
   + String(TIME_TO_SLEEP) + " Seconds");
   
-  my_sds.begin(&port);
+  my_sds.begin(&hw_port);
   dht.begin();
   WiFi.begin(ssid, password); 
   
@@ -60,9 +65,9 @@ void gatherData(){
   err = my_sds.read(&p25, &p10);
 
   if (!err) {
-		Serial.println("P2.5: " + String(p25));
-		Serial.println("P10:  " + String(p10));
-	}
+    Serial.println("P2.5: " + String(p25));
+    Serial.println("P10:  " + String(p10));
+  }
 
 	delay(100);
   my_sds.sleep();
@@ -83,34 +88,37 @@ void gatherData(){
 }
 
 void postData(){
-    if(WiFi.status() == WL_CONNECTED){   //Check WiFi connection status
-  
-    HTTPClient http;   
-    String json = "{\"pm25\":\"" + String(p25) + 
-      "\",\"pm10\":\"" + String(p10) + 
-      "\",\"temp\":\"" + String(temp) +
-      "\",\"hum\":\"" + String(hum) +
-      "\"}";
+  if(WiFi.status() == WL_CONNECTED){   //Check WiFi connection status
 
-    http.begin(serverAPI);  
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("x-auth-token", auth_token);          
-    Serial.println(json);
-    int httpResponseCode = http.POST(json);  
-  
-    if(httpResponseCode > 0){
-  
-      String response = http.getString();   
-  
-      Serial.println(httpResponseCode);   
-      Serial.println(response);         
-  
-    } else {
-      Serial.print("Error on sending POST: ");
-      Serial.println(httpResponseCode);
-    }
+  WiFiClientSecure client;
+  client.setCACert(root_ca);
 
-    http.end(); 
+  if (!client.connect(host, 443)) {
+    Serial.println("Connection failed.");
+    return;
+  }
+    
+  String body = 
+  "{\"pm25\":\"" + String(p25) + 
+  "\",\"pm10\":\"" + String(p10) + 
+  "\",\"temp\":\"" + String(temp) +
+  "\",\"hum\":\"" + String(hum) +
+  "\"}";
+      
+  String postRequest = 
+  "POST " + uri + " HTTP/1.1\r\n" + 
+  "Host: " + host + "\r\n" + 
+  "Content-Type: application/json\r\n" +
+  "Content-Length: " + body.length() + "\r\n" +
+  "x-auth-token: " + auth_token + "\r\n" +
+  "\r\n" + body;
+
+  Serial.println("\n********");
+  Serial.println(postRequest);
+  client.print(postRequest);
+  client.stop(); 
+  Serial.println();
+  Serial.println("***DONE***");
 
   } else {
     Serial.println("Error in WiFi connection");  
